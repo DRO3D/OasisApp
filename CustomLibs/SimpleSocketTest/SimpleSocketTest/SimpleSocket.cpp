@@ -2,87 +2,129 @@
 
 #pragma warning(disable: 4996)
 
+
+/*Creating simple socket WITHOUT initialization */
 SS::SimpleSocket::SimpleSocket() {
 	initiated = false;
+	is_started = false;
+	is_connected = false;
 
+	CallBacks = nullptr;
+	node_list = nullptr;
+	processing_queue = nullptr;
+
+	processor = nullptr;
+	listner = nullptr;
 }
 
 /*name: node name
 ip_adres: Local IP adress
 port : program reserved port
-type_of_node : 0 - server, 1 - client
-max : max connections to node*/
-SS::SimpleSocket::SimpleSocket(std::string name, std::string ip_adres, int port, bool type_of_node, int max, bool need_processor)
+type_of_node : Server or Client */
+SS::SimpleSocket::SimpleSocket(std::string name, std::string ip_adres, int port, NodeType type_of_node)
 {
 	initiated = true;
+	is_started = false;
+	is_connected = false;
 	WORD DLLVersion = MAKEWORD(2, 1);
 	if (WSAStartup(DLLVersion, &wsaData) != 0) {
 		std::cout << "Error! Winsoc not initiated. (" << WSAGetLastError() << ")" << std::endl;
 		exit(1);
 	}
 
+	CallBacks = new std::map <std::string, Callback>;
+	node_list = new std::vector <ConnectionInfo>;
+	processing_queue= new std::deque <ProcessData>;
+	processor = nullptr;
+	listner = nullptr;
 	
 	socket_data.sin_addr.s_addr = inet_addr(ip_adres.c_str());
 	socket_data.sin_port = htons(port);
 	socket_data.sin_family = AF_INET;
 	sizeofaddr = sizeof(socket_data);
 	node_name = name;
-	max_connections = max;
+	max_connections = BACKLOG_THREADS;
 	type = type_of_node;
 
-	if (type) {
+}
 
+
+/*Start node*/
+int SS::SimpleSocket::Start(ProcessingType need_processor) 
+{
+	
+	if (!is_started){
+		is_started = true;
+		if (type) {
+			if (need_processor) {
+				processor = new std::thread(&SS::SimpleSocket::process, this);
+				processor->detach();
+			}
+			else {
+				process();
+			}
+		}
+		else
+		{
+
+			listner = new std::thread(&SS::SimpleSocket::listener_func, this);
+			listner->detach();
+			if (need_processor) {
+				processor = new std::thread(&SS::SimpleSocket::process, this);
+				processor->detach();
+			}
+			else {
+				process();
+			}
+		}
 	}
 	else
 	{
-		
-		listner = new std::thread(&SS::SimpleSocket::listener_func,this);
-		listner->detach();
-		if (need_processor) {
-			processor = new std::thread(&SS::SimpleSocket::process, this);
-			processor->detach();
-		}
-		else {
-			process();
-		}
-		
+		return -1;
 	}
-	
+	return 0;
 }
 
 
 void SS::SimpleSocket::listener_func()
 {
-	std::cout << "Listener started."<<std::endl;
-	SOCKADDR_IN connection_soc=socket_data;
-	int sizeof_new_con=sizeofaddr;
+
+	std::cout << "Listener started." << std::endl;
+	SOCKADDR_IN connection_soc = socket_data;
+	int sizeof_new_con = sizeofaddr;
 	SOCKET slistener = socket(AF_INET, SOCK_STREAM, NULL);
+	listenSoc = slistener;
 	bind(slistener, (SOCKADDR*)&socket_data, sizeofaddr);
 	listen(slistener, max_connections);
-	SOCKET newCon = accept(slistener, (SOCKADDR*)&connection_soc, &sizeof_new_con);
-	if (newCon == 0) {
-		std::cout << "Error! Client connection failature. (" << WSAGetLastError() << ")" << std::endl;
-	}
-	else {
-		std::cout << "Client Connected!" << std::endl;
-
-		char client_name[256];
-		send(newCon, node_name.c_str(), sizeof(node_name.c_str()), NULL);
-		recv(newCon, client_name, sizeof(client_name), NULL);
+	while(true)
+	{
 		
-		std::string clinm = "trump";
+		SOCKET newCon = accept(slistener, (SOCKADDR*)&connection_soc, &sizeof_new_con);
+		if (newCon == 0) {
+			std::cout << "Error! Client connection failature. (" << WSAGetLastError() << ")" << std::endl;
+		}
+		else {
+			std::cout << "Client Connected!" << std::endl;
+			is_connected = true;
+			char client_name[256];
+			send(newCon, node_name.c_str(), node_name.size() + 1, NULL);
+			recv(newCon, client_name, sizeof(client_name), NULL);
 
-		ConnectionInfo NewCli;
-		NewCli.soc = newCon;
-		NewCli.soc_data = socket_data;
-		NewCli.name = client_name;
-		//connected_nodes.insert(std::pair<std::string, ConnectionInfo>(client_name, NewCli));
-		node_listl.push_back(NewCli);
-		NewCli.reciver = new std::thread(&SS::SimpleSocket::reciver, this, NewCli);
-		NewCli.reciver->detach();
+			std::string clinm = "trump";
 
-		Send("print Yes");
+			ConnectionInfo NewCli;
+			NewCli.soc = newCon;
+			NewCli.soc_data = socket_data;
+			NewCli.name = client_name;
+			//connected_nodes.insert(std::pair<std::string, ConnectionInfo>(client_name, NewCli));	
+			NewCli.reciver = new std::thread(&SS::SimpleSocket::reciver, this, NewCli);
+			NewCli.reciver->detach();
+			NewCli.msg_id = 0;
+			node_list->push_back(NewCli);
 
+		
+
+		}
 	}
 
 }
@@ -90,58 +132,63 @@ void SS::SimpleSocket::listener_func()
 void SS::SimpleSocket::process()
 {
 	while (true) {
-		if (processing_queue.size() > 0) {
-			ProcessData next_proc= processing_queue[0];
-			processing_queue.pop_front();
-			if (!(CallBacks.find(next_proc.name) == CallBacks.end())) {
-				CallBacks[next_proc.name].exec(next_proc.params, next_proc.sender);
+		if (processing_queue->size() > 0) {
+			ProcessData next_proc= processing_queue->front();
+			processing_queue->pop_front();
+			if (!(CallBacks->find(next_proc.name) == CallBacks->end())) {
+				(*CallBacks)[next_proc.name].exec(next_proc.params, next_proc.sender);
 			}
 		}
 	}
 }
 
+
 /*Connects client to a server 
 adres: IP adres
 port: external port*/
-int SS::SimpleSocket::Connect(std::string adres, int port, bool need_processor)
+int SS::SimpleSocket::Connect(std::string adres, int port, int retrys)
 {
 	if (type) {
 		
-		socket_data.sin_addr.s_addr = inet_addr(adres.c_str());
-		socket_data.sin_port = htons(port);
-		socket_data.sin_family = AF_INET;
-		sizeofaddr = sizeof(socket_data);
+		bool flag = true;
+		int times = retrys;
+		int outp = 0;
+		while (flag and times>0) {
+			times--;
+			socket_data.sin_addr.s_addr = inet_addr(adres.c_str());
+			socket_data.sin_port = htons(port);
+			socket_data.sin_family = AF_INET;
+			sizeofaddr = sizeof(socket_data);
 
-		SOCKET Connection = socket(AF_INET, SOCK_STREAM, NULL);
-		
-		if (connect(Connection, (SOCKADDR*)&socket_data, sizeofaddr) != 0) {
-			std::cout << "Error! Client connection failature. ("<< WSAGetLastError()<<")" << std::endl;
-			return -2;
+			SOCKET Connection = socket(AF_INET, SOCK_STREAM, NULL);
+
+			if (connect(Connection, (SOCKADDR*)&socket_data, sizeofaddr) != 0) {
+				std::cout << "Error! Client connection failature. (" << WSAGetLastError() << ")" << std::endl;
+				outp= WSAGetLastError();
+			}
+			else
+			{
+				std::cout << "Connected!" << std::endl;
+				char host_name[256];
+
+				is_connected = true;
+				recv(Connection, host_name, sizeof(host_name), NULL);
+				send(Connection, node_name.c_str(), node_name.size() + 1, NULL);
+
+				ConnectionInfo Host;
+				Host.soc = Connection;
+				Host.soc_data = socket_data;
+				Host.name = host_name;
+				//connected_nodes.insert(std::pair<std::string, ConnectionInfo>(host_name, Host));
+				Host.reciver = new std::thread(&SS::SimpleSocket::reciver, this, Host);
+				Host.reciver->detach();
+				Host.msg_id = 0;
+				node_list->push_back(Host);
+			}
+			
+
 		}
-		std::cout << "Connected!"<<std::endl;
-		char host_name[256];
-
-		recv(Connection, host_name, sizeof(host_name), NULL);
-		send(Connection, node_name.c_str(), sizeof(node_name.c_str()), NULL);
-
-		ConnectionInfo Host;
-		Host.soc = Connection;
-		Host.soc_data = socket_data;
-		Host.name = host_name;
-		//connected_nodes.insert(std::pair<std::string, ConnectionInfo>(host_name, Host));
-		node_listl.push_back(Host);
-
-		Host.reciver = new std::thread(&SS::SimpleSocket::reciver, this, Host);
-		Host.reciver->detach();
-
-
-		if (need_processor) {
-			processor = new std::thread(&SS::SimpleSocket::process, this);
-			processor->detach();
-		}
-		else {
-			process();
-		}
+		return outp;
 	}
 	else {
 		std::cout << "Error! Not a client." << std::endl;
@@ -150,6 +197,76 @@ int SS::SimpleSocket::Connect(std::string adres, int port, bool need_processor)
 	return 0;
 }
 
+
+/*Stop node*/
+int SS::SimpleSocket::Disconnect(std::string NodeName)
+{
+
+	if (type) {
+
+		Send("DisconnectMe");
+
+		
+		shutdown((*node_list)[0].soc, CF_BOTH);
+		for (int i = 0; i < node_list->size(); i++)
+		{
+			(*node_list)[i].reciver->~thread();
+			delete (*node_list)[i].reciver;
+			shutdown((*node_list)[i].soc, CF_BOTH);
+			(*node_list)[i].name.clear();
+
+
+		}
+
+	}
+	else
+	{
+		if (NodeName != "") {
+			for (int  i = 0; i < node_list->size(); i++)
+			{
+				if ((*node_list)[i].name == NodeName) 
+				{
+					(*node_list)[i].reciver->~thread();
+					delete (*node_list)[i].reciver;
+					shutdown((*node_list)[i].soc, CF_BOTH);
+					(*node_list)[i].name.clear();
+
+				}
+			}
+		}
+		else {
+			for (int i = 0; i < node_list->size(); i++)
+			{
+				
+					(*node_list)[i].reciver->~thread();
+					delete (*node_list)[i].reciver;
+					shutdown((*node_list)[i].soc, CF_BOTH);
+					(*node_list)[i].name.clear();
+
+				
+			}
+			
+			if (processor != nullptr) {
+				processor->~thread();
+				delete processor;
+			}
+
+			if (listner != nullptr) {
+				listner->~thread();
+				delete listner;
+			}
+
+			delete node_list;
+			delete processing_queue;
+
+			shutdown(listenSoc, CF_BOTH);
+		}
+	}
+	return 0;
+}
+
+
+/*Connect external command to socket*/
 int SS::SimpleSocket::ConnectCommand(std::string name, int(*ptr)(std::string, std::string))
 {
 	if (initiated) 
@@ -158,7 +275,7 @@ int SS::SimpleSocket::ConnectCommand(std::string name, int(*ptr)(std::string, st
 
 		newCB.exec = ptr;
 
-		CallBacks.insert(std::pair<std::string, Callback>(name, newCB));
+		CallBacks->insert(std::pair<std::string, Callback>(name, newCB));
 
 		return 0;
 	}
@@ -169,88 +286,153 @@ int SS::SimpleSocket::ConnectCommand(std::string name, int(*ptr)(std::string, st
 	}
 }
 
+
+/*Send message to clients*/
 int SS::SimpleSocket::Send(std::string data, std::vector<std::string> clients)
 {
-	if (initiated){
-		if (type) {
+	if(is_started){
+		if(is_connected){
+			if (initiated) {
+				std::string pref;
+				
 
-			for (int i = 0; i < node_listl.size(); i++) {
+				if (type) {
 
-				send(node_listl[i].soc, data.c_str(), sizeof(data.c_str()), NULL);
+					for (int i = 0; i < node_list->size(); i++) {
+						pref = std::to_string(++(*node_list)[i].msg_id);
+						pref.append(" ");
+						pref.append(data);
+						std::cout << "SENDING:" << pref << std::endl;
+						send((*node_list)[i].soc, pref.c_str(), pref.size() + 1, NULL);
 
-			}
-
-		}
-		else
-		{
-			if (clients.size() == 0) {
-				for (int i = 0; i < node_listl.size(); i++) {
-
-					send(node_listl[i].soc, data.c_str(), sizeof(data.c_str()), NULL);
-
-				}
-			}
-			else
-			{
-				for (int i = 0; i < node_listl.size(); i++) {
-
-					for (int i = 0; i < clients.size(); i++)
-					{
-						if (node_listl[i].name == clients[i]) {
-							send(node_listl[i].soc, data.c_str(), sizeof(data.c_str()), NULL);
-							break;
-						}
 					}
 
 				}
+				else
+				{
+					if (clients.size() == 0) {
+						for (int i = 0; i < node_list->size(); i++) {
+							pref = std::to_string(++(*node_list)[i].msg_id);
+							pref.append(" ");
+							pref.append(data);
+							std::cout << "SENDING:" << pref << std::endl;
+							send((*node_list)[i].soc, pref.c_str(), pref.size() + 1, NULL);
 
+						}
+					}
+					else
+					{
+						for (int i = 0; i < node_list->size(); i++) {
+
+							for (int g = 0; g < clients.size(); g++)
+							{
+								if ((*node_list)[i].name == clients[g]) {
+									pref = std::to_string(++(*node_list)[i].msg_id);
+									pref.append(" ");
+									pref.append(data);
+									std::cout << "SENDING:" << pref << std::endl;
+									send((*node_list)[i].soc, pref.c_str(), pref.size() + 1, NULL);
+									break;
+								}
+							}
+
+						}
+
+					}
+
+				}
+				
+				return 0;
 			}
-
+			else
+			{
+				std::cout << "Not initiated!" << std::endl;
+				return -1;
+			}
+		}
+		else 
+		{
+			std::cout << "Not connected!" << std::endl;
+			return -2;
 		}
 
-		return 0;
 	}
 	else 
 	{
-		std::cout << "Not initiated!" << std::endl;
-		return -1;
+		std::cout << "Not started!" << std::endl;
+		return -3;
 	}
+}
+
+SS::SimpleSocket::~SimpleSocket()
+{
+
+}
+
+std::vector<std::string> SS::SimpleSocket::GetUserList()
+{
+	std::vector <std::string> ret;
+	
+	for (int i = 0; i < node_list->size(); i++)
+	{
+		ret.push_back((*node_list)[i].name);
+	}
+
+	return ret;
 }
 
 
 void SS::SimpleSocket::reciver(ConnectionInfo node_handler)
 {
 	char data[1024];
+	UINT last_id = 0;
 	while (true) {
 		
 		recv(node_handler.soc, data, sizeof(data), NULL);
-
+		std::cout << "GETING:" << data << std::endl;
 		bool flag = false;
 		int cou = 0;
 		std::string func_name="";
 		std::string args = "";
-
-		while (data[cou]!='\0')
-		{
-			if (data[cou] == ' ' and !flag) {
-				flag = true;
-			}
-			else 
-			{
-				if (flag) {
-					args.push_back(data[cou]);
-				}
-				else
-				{
-					func_name.push_back(data[cou]);
-				}
-			}
+		int verify = 0;
+		while (data[cou] != ' ') {
+			verify = verify * 10;
+			verify = data[cou]-48;
+			cou++;
 		}
-		ProcessData NewRequest;
-		NewRequest.name = func_name;
-		NewRequest.params = args;
-		NewRequest.sender = node_handler.name;
 
-		processing_queue.push_back(NewRequest);
+		if (last_id == verify) {
+			//AutoDisconnect here
+		}
+		else
+		{
+			cou++;
+			last_id = verify;
+			while (data[cou]!='\0')
+			{
+				if (data[cou] == ' ' and !flag) {
+					flag = true;
+				}
+				else 
+				{
+					if (flag) {
+						args.push_back(data[cou]);
+					}
+					else
+					{
+						func_name.push_back(data[cou]);
+					}
+				}
+				cou++;
+			}
+			ProcessData NewRequest;
+			NewRequest.name = func_name;
+			NewRequest.params = args;
+			NewRequest.sender = node_handler.name;
+
+			processing_queue->push_back(NewRequest);
+		}
+
+		
 	}
 }

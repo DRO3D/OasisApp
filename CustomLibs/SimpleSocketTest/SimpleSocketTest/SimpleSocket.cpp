@@ -96,11 +96,12 @@ void SS::SimpleSocket::listener_func()
 	listenSoc = slistener;
 	bind(slistener, (SOCKADDR*)&socket_data, sizeofaddr);
 	listen(slistener, max_connections);
-	while(true)
+	while(is_started)
 	{
-		
-		SOCKET newCon = accept(slistener, (SOCKADDR*)&connection_soc, &sizeof_new_con);
-		if (newCon == 0) {
+		SOCKET newCon;
+		newCon = 0;
+		newCon = accept(slistener, (SOCKADDR*)&connection_soc, &sizeof_new_con);
+		if (newCon == 0 or WSAGetLastError() == 10004) {
 			std::cout << "Error! Client connection failature. (" << WSAGetLastError() << ")" << std::endl;
 		}
 		else {
@@ -118,6 +119,7 @@ void SS::SimpleSocket::listener_func()
 			NewCli.name = client_name;
 			//connected_nodes.insert(std::pair<std::string, ConnectionInfo>(client_name, NewCli));	
 			NewCli.reciver = new std::thread(&SS::SimpleSocket::reciver, this, NewCli);
+			NewCli.n_handl=NewCli.reciver->native_handle();
 			NewCli.reciver->detach();
 			NewCli.msg_id = 0;
 			node_list->push_back(NewCli);
@@ -131,7 +133,7 @@ void SS::SimpleSocket::listener_func()
 
 void SS::SimpleSocket::process()
 {
-	while (true) {
+	while (is_started) {
 		if (processing_queue->size() > 0) {
 			ProcessData next_proc= processing_queue->front();
 			processing_queue->pop_front();
@@ -181,6 +183,7 @@ int SS::SimpleSocket::Connect(std::string adres, int port, int retrys)
 				Host.name = host_name;
 				//connected_nodes.insert(std::pair<std::string, ConnectionInfo>(host_name, Host));
 				Host.reciver = new std::thread(&SS::SimpleSocket::reciver, this, Host);
+				Host.n_handl = Host.reciver->native_handle();
 				Host.reciver->detach();
 				Host.msg_id = 0;
 				node_list->push_back(Host);
@@ -199,17 +202,21 @@ int SS::SimpleSocket::Connect(std::string adres, int port, int retrys)
 
 
 /*Stop node*/
-int SS::SimpleSocket::Disconnect(std::string NodeName)
+int SS::SimpleSocket::Disconnect(std::string NodeName, bool is_external)
 {
 
 	if (type) {
 
-		Send("DisconnectMe");
-
+		if (is_external) {
+			Send("DisconnectMe");
+		}
+		
+		std::cout << "Client disconnected." << std::endl;
 		
 		shutdown((*node_list)[0].soc, CF_BOTH);
 		for (int i = 0; i < node_list->size(); i++)
 		{
+			closesocket((*node_list)[i].soc);
 			(*node_list)[i].reciver->~thread();
 			delete (*node_list)[i].reciver;
 			shutdown((*node_list)[i].soc, CF_BOTH);
@@ -218,18 +225,47 @@ int SS::SimpleSocket::Disconnect(std::string NodeName)
 
 		}
 
+		if (processor != nullptr) {
+			processor->~thread();
+			delete processor;
+			processor = nullptr;
+		}
+
+		if (listner != nullptr) {
+			closesocket(listenSoc);
+			listner->~thread();
+			delete listner;
+			listner = nullptr;
+		}
+
+		is_started = false;
+		is_connected = false;
+
+		delete node_list;
+		delete processing_queue;
+
+		shutdown(listenSoc, CF_BOTH);
+
 	}
 	else
 	{
+
 		if (NodeName != "") {
 			for (int  i = 0; i < node_list->size(); i++)
 			{
 				if ((*node_list)[i].name == NodeName) 
 				{
+					if (is_external) {
+						Send("DisconnectMe");
+					}
+
+					closesocket((*node_list)[i].soc);
 					(*node_list)[i].reciver->~thread();
 					delete (*node_list)[i].reciver;
 					shutdown((*node_list)[i].soc, CF_BOTH);
 					(*node_list)[i].name.clear();
+
+					std::cout << "Client "<< (*node_list)[i] .name<<" disconnected." << std::endl;
 
 				}
 			}
@@ -237,24 +273,34 @@ int SS::SimpleSocket::Disconnect(std::string NodeName)
 		else {
 			for (int i = 0; i < node_list->size(); i++)
 			{
+				if (is_external) {
+					Send("DisconnectMe");
+				}
+				closesocket((*node_list)[i].soc);
+				(*node_list)[i].reciver->~thread();
+				delete (*node_list)[i].reciver;
+				shutdown((*node_list)[i].soc, CF_BOTH);
+				(*node_list)[i].name.clear();
 				
-					(*node_list)[i].reciver->~thread();
-					delete (*node_list)[i].reciver;
-					shutdown((*node_list)[i].soc, CF_BOTH);
-					(*node_list)[i].name.clear();
-
+				std::cout << "All clients disconnected." << std::endl;
 				
 			}
 			
 			if (processor != nullptr) {
 				processor->~thread();
 				delete processor;
+				processor = nullptr;
 			}
 
 			if (listner != nullptr) {
+				closesocket(listenSoc);
 				listner->~thread();
 				delete listner;
+				listner = nullptr;
 			}
+
+			is_started = false;
+			is_connected = false;
 
 			delete node_list;
 			delete processing_queue;
@@ -364,6 +410,11 @@ int SS::SimpleSocket::Send(std::string data, std::vector<std::string> clients)
 	}
 }
 
+float SS::SimpleSocket::Ping(std::string node)
+{
+	return 0.0f;
+}
+
 SS::SimpleSocket::~SimpleSocket()
 {
 
@@ -386,7 +437,7 @@ void SS::SimpleSocket::reciver(ConnectionInfo node_handler)
 {
 	char data[1024];
 	UINT last_id = 0;
-	while (true) {
+	while (is_started) {
 		
 		recv(node_handler.soc, data, sizeof(data), NULL);
 		std::cout << "GETING:" << data << std::endl;
@@ -425,12 +476,22 @@ void SS::SimpleSocket::reciver(ConnectionInfo node_handler)
 				}
 				cou++;
 			}
-			ProcessData NewRequest;
-			NewRequest.name = func_name;
-			NewRequest.params = args;
-			NewRequest.sender = node_handler.name;
 
-			processing_queue->push_back(NewRequest);
+			if (func_name == "DisconnectMe") {
+				Disconnect(node_handler.name, false);
+			}
+			else if (false) {
+
+
+			}
+			else {
+				ProcessData NewRequest;
+				NewRequest.name = func_name;
+				NewRequest.params = args;
+				NewRequest.sender = node_handler.name;
+
+				processing_queue->push_back(NewRequest);
+			}
 		}
 
 		

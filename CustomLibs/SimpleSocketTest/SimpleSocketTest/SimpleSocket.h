@@ -28,6 +28,7 @@ namespace SS{
 			SOCKADDR_IN soc_data;
 			SOCKET soc;
 			std::thread* reciver;
+			std::thread::native_handle_type n_handl;
 			std::string name;
 			UINT msg_id;
 	};
@@ -79,9 +80,10 @@ namespace SS{
 			SimpleSocket(std::string name, std::string ip_adres, int port,NodeType type_of_node);
 			int Start(ProcessingType need_processor = Main);
 			int Connect(std::string adres, int port, int retrys=1);
-			int Disconnect(std::string NodeName="");
+			int Disconnect(std::string NodeName="", bool is_external=true);
 			int ConnectCommand(std::string name, int (*ptr)(std::string, std::string));
 			int Send(std::string data, std::vector<std::string> clients= std::vector<std::string>());
+			float Ping(std::string node);
 			~SimpleSocket();
 
 			std::vector<std::string>GetUserList();

@@ -208,6 +208,8 @@ int main(int, char**)
             ImGui::Text(str.c_str());
             int my_image_width = 0;
             int my_image_height = 0;
+
+            //Create textures for images
             ID3D11ShaderResourceView* my_texture = NULL;
             ID3D11ShaderResourceView* my_texture2 = NULL;
             ID3D11ShaderResourceView* my_texture3 = NULL;
@@ -215,10 +217,10 @@ int main(int, char**)
             ID3D11ShaderResourceView* my_texture5 = NULL;
             ID3D11ShaderResourceView* my_texture6 = NULL;
             
-
+            //Path and sizes of image
             bool ret = LoadTextureFromFile("..\\Project2\\Logos\\Oasis1.jpg", &my_texture, &my_image_width, &my_image_height);
-            IM_ASSERT(ret);
-            ImGui::Image((void*)my_texture, ImVec2(my_image_width * 0.75, my_image_height * 0.75));
+            IM_ASSERT(ret); //Don't touch this
+            ImGui::Image((void*)my_texture, ImVec2(my_image_width * 0.75, my_image_height * 0.75)); //Showing the image
             ImGui::SameLine();
 
             ret = LoadTextureFromFile("..\\Project2\\Logos\\Oasis2.jpg", &my_texture2, &my_image_width, &my_image_height);

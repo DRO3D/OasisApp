@@ -38,10 +38,16 @@ int server_react(string str, string snd) {
 
 
 int main() {
+	
+
+
+	miniMe.GetAdapterList();
+
+	
+
 	cout << "0-start as server, 1- start as client" << endl;
 	int chose;
 	cin >> chose;
-
 	switch (chose)
 	{
 	case 0:
@@ -75,13 +81,16 @@ int main() {
 	
 	miniMe.Start(SS::Background);
 
+	//miniMe.EnableNode("192.168.0.242", "30:9c:23:ae:33:66");
+
 	while (true) {
 
 		string str;
 
 		cin >> str;
 
-		miniMe.Send("stop "+str);
+		miniMe.Send("print" + str);
+		//cout << miniMe.Ping("(2)Test client(2)") << endl;
 
 	}
 

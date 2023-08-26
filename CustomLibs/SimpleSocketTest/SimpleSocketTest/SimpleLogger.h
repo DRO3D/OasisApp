@@ -7,8 +7,10 @@
 #include <string>
 #include <fstream>
 
+//TODO Fix Logger
+
 namespace SS{
-/*
+
 	enum DataSaveType
 	{
 		DD_MM_YYYY = 0,
@@ -47,7 +49,7 @@ namespace SS{
 	void ChangePath(DataSaveType NewSaveFormat) {
 
 	}
-	*/
+	
 }
 
 

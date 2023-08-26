@@ -20,7 +20,7 @@ int shutdown(string nan, string non) {
 int server_react(string str, string snd) {
 
 	cout << snd << ": " << str << endl;
-	vector <string> usrs = miniMe.GetUserList();
+	vector <string> usrs = miniMe.GetNodeList();
 	vector <string> list;
 
 	for (int i = 0; i < usrs.size(); i++)
@@ -39,11 +39,10 @@ int server_react(string str, string snd) {
 
 int main() {
 	
+	vector<SS::Adapter>test;
 
+	test=SS::GetAdapterList();
 
-	miniMe.GetAdapterList();
-
-	
 
 	cout << "0-start as server, 1- start as client" << endl;
 	int chose;
@@ -52,7 +51,7 @@ int main() {
 	{
 	case 0:
 	{
-		miniMe=SS::SimpleSocket("Test server", "127.0.0.1", 25565, SS::Server);
+		miniMe=SS::SimpleSocket("Test server", SS::GetAdapterList()[0], 25565, SS::Server);
 		miniMe.ConnectCommand("print", server_react);
 		miniMe.ConnectCommand("stop", shutdown);
 		break; 
@@ -60,7 +59,7 @@ int main() {
 
 	case 1:
 	{
-		miniMe = SS::SimpleSocket("(1)Test client(1)", "127.0.0.1", 25566, SS::Client);
+		miniMe = SS::SimpleSocket("(1)Test client(1)", SS::GetAdapterList()[0], 25566, SS::Client);
 		miniMe.Connect("127.0.0.1", 25565);
 		miniMe.ConnectCommand("print", print);
 			
@@ -68,7 +67,7 @@ int main() {
 	}
 	case 2:
 	{
-		miniMe = SS::SimpleSocket("(2)Test client(2)", "127.0.0.1", 25567, SS::Client);
+		miniMe = SS::SimpleSocket("(2)Test client(2)", SS::GetAdapterList()[0], 25567, SS::Client);
 		miniMe.Connect("127.0.0.1", 25565);
 		miniMe.ConnectCommand("print", print);
 

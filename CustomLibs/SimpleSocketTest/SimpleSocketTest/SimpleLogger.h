@@ -7,7 +7,7 @@
 #include <string>
 #include <fstream>
 
-//TODO Fix Logger
+#define DISABLE_LOGGER
 
 namespace SS{
 

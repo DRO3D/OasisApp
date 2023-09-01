@@ -13,8 +13,6 @@
 #include <filesystem>
 #include<direct.h>
 
-///TODO Fix timestamp UTC
-
 #define UTC 3 //unied time const
 #define CUR_TIME std::chrono::system_clock::now().time_since_epoch().count()
 #define STRT_TIME std::chrono::system_clock::now().time_since_epoch().count()-start_time-UTC*36000000000

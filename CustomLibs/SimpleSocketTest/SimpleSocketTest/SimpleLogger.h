@@ -1,13 +1,23 @@
 #pragma once
 
+#define _CRT_SECURE_NO_WARNINGS
+
+
 #ifndef DISABLE_LOGGER
 
 #include <chrono>
 #include <iostream>
 #include <string>
 #include <fstream>
+#include <ctime>
+#include <filesystem>
+#include<direct.h>
 
-#define DISABLE_LOGGER
+///TODO Fix timestamp UTC
+
+#define UTC 3 //unied time const
+#define CUR_TIME std::chrono::system_clock::now().time_since_epoch().count()
+#define STRT_TIME std::chrono::system_clock::now().time_since_epoch().count()-start_time-UTC*36000000000
 
 namespace SS{
 
@@ -26,29 +36,13 @@ namespace SS{
 		
 	};
 
-	std::string path="";
-	std::ifstream fin;
+	void Log(std::string message, MsgType type = Warn);
 
-	bool is_started = false;
+	void ChangePath(std::string NewPath);
 
-	void Log(std::string message, MsgType type=Warn) {
-		if (!is_started) {
-			//std::cout << std::chrono::system_clock::now().time_since_epoch();
-			//fin.open()
-		}
+	void ChangePath(DataSaveType NewSaveFormat);
 
-
-	}
-
-	void ChangePath(std::string NewPath) {
-
-		path = NewPath;
-
-	}
-
-	void ChangePath(DataSaveType NewSaveFormat) {
-
-	}
+	std::string ConvertMsecToStr(long long int msec, char splitter);
 	
 }
 

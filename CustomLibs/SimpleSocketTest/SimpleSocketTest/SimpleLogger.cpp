@@ -56,7 +56,7 @@ void SS::Log(std::string message, MsgType type ) {
 	str_date = nullptr;
 	fullpath.append('/'+ today_folder);
 	int md=_mkdir(fullpath.c_str());
-	fullpath.append("/"+ ConvertMsecToStr(CUR_TIME, ';') + ".log");
+	fullpath.append("/"+ ConvertMsecToStr(CUR_TIME, '-') + ".log");
 	if (inst_path == "") {
 
 		inst_path = fullpath;

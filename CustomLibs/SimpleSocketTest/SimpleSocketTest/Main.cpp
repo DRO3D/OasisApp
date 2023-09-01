@@ -38,15 +38,18 @@ int server_react(string str, string snd) {
 
 
 int main() {
-	
-	vector<SS::Adapter>test;
-
-	test=SS::GetAdapterList();
+	while (true)
+	{
+		SS::Log("Cum");
+	}
 
 
 	cout << "0-start as server, 1- start as client" << endl;
+
+
 	int chose;
 	cin >> chose;
+
 	switch (chose)
 	{
 	case 0:

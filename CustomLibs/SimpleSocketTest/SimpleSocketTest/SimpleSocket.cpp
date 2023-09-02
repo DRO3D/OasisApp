@@ -41,7 +41,7 @@ SS::SimpleSocket::SimpleSocket(std::string name, SS::Adapter adapter_info, int p
 	is_connected = false;
 	WORD DLLVersion = MAKEWORD(2, 1);
 	if (WSAStartup(DLLVersion, &wsa_data) != 0) {
-		std::cout << "Error! Winsoc not initiated. (" << WSAGetLastError() << ")" << std::endl;
+		SS::Log("Winsoc not initiated. Code(" + std::to_string(WSAGetLastError()) + ")", );
 		exit(1);
 	}
 	is_initiated = true;

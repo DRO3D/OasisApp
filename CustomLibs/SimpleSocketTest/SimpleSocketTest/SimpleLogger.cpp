@@ -90,7 +90,7 @@ std::string SS::ConvertMsecToStr(long long int msec, char splitter) {
 	long long int hour = floorf(float(min / 60));
 	min = min % 60;
 	hour = hour % 24;
-	hour += UTC;
+	//hour += UTC;
 
 	std::string prop_time;
 

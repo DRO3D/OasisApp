@@ -38,10 +38,7 @@ int server_react(string str, string snd) {
 
 
 int main() {
-	while (true)
-	{
-		SS::Log("Cum");
-	}
+	
 
 
 	cout << "0-start as server, 1- start as client" << endl;

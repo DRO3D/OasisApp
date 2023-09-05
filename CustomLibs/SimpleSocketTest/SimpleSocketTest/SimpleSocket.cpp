@@ -162,6 +162,8 @@ void SS::SimpleSocket::ListenerFunc()
 
 }
 
+UINT p_time = CUR_TIME;
+
 void SS::SimpleSocket::Process()
 {
 	while (is_started) {
@@ -178,6 +180,14 @@ void SS::SimpleSocket::Process()
 				SS::Log("Routin not found (Name: " + next_proc.name + ", Args: " + next_proc.params + ", From: " + next_proc.sender + ")", SS::Inf);
 			}
 		}
+
+		if (CUR_TIME - p_time > AUTO_PING_PERIOD) {
+			for (int i = 0; i < node_list->size(); i++)
+			{
+				Ping((*node_list)[i].name);
+			}
+		}
+
 	}
 }
 
@@ -412,11 +422,11 @@ int SS::SimpleSocket::ConnectCommand(std::string name, int(*ptr)(std::string, st
 /// <returns>-1 if not initiated, -2 if not connected, -3 if not started</returns>
 int SS::SimpleSocket::Send(std::string data, std::vector<std::string> clients)
 {
-	if(is_started){
-		if(is_connected){
+	if (is_started) {
+		if (is_connected) {
 			if (is_initiated) {
 				std::string pref;
-				
+
 
 				if (type) {
 
@@ -424,7 +434,7 @@ int SS::SimpleSocket::Send(std::string data, std::vector<std::string> clients)
 						pref = std::to_string(++(*node_list)[i].msg_id);
 						pref.append(" ");
 						pref.append(data);
-						SS::Log("SENDING: "+ pref + " (to:" + (*node_list)[i].name + ")", SS::Inf);
+						SS::Log("SENDING: " + pref + " (to:" + (*node_list)[i].name + ")", SS::Inf);
 						send((*node_list)[i].soc, pref.c_str(), pref.size() + 1, NULL);
 
 					}
@@ -452,7 +462,7 @@ int SS::SimpleSocket::Send(std::string data, std::vector<std::string> clients)
 									pref = std::to_string(++(*node_list)[i].msg_id);
 									pref.append(" ");
 									pref.append(data);
-									SS::Log("SENDING: " + pref+" (to:"+ (*node_list)[i].name+")", SS::Inf);
+									SS::Log("SENDING: " + pref + " (to:" + (*node_list)[i].name + ")", SS::Inf);
 									send((*node_list)[i].soc, pref.c_str(), pref.size() + 1, NULL);
 									break;
 								}
@@ -463,7 +473,7 @@ int SS::SimpleSocket::Send(std::string data, std::vector<std::string> clients)
 					}
 
 				}
-				
+
 				return 0;
 			}
 			else
@@ -472,14 +482,14 @@ int SS::SimpleSocket::Send(std::string data, std::vector<std::string> clients)
 				return -1;
 			}
 		}
-		else 
+		else
 		{
 			SS::Log("Not connected", SS::Err);
 			return -2;
 		}
 
 	}
-	else 
+	else
 	{
 		SS::Log("Not started", SS::Err);
 		return -3;
@@ -497,19 +507,26 @@ int SS::SimpleSocket::Send(std::string data, std::vector<std::string> clients)
 /// <returns>time in msec</returns>
 int SS::SimpleSocket::Ping(std::string node)
 {
-	if (GetNodeByName(node)==nullptr) {
+	if (GetNodeByName(node) == nullptr) {
 		return -1;
 	}
 	long long int start;
 	start = CUR_TIME;
-	Send("PingINI", {node});
+	Send("PingINI", { node });
 
-	GetNodeByName(node)->pinger_flag=true;
+	GetNodeByName(node)->pinger_flag = true;
 
-	while (GetNodeByName(node)->pinger_flag) {
+	while ((GetNodeByName(node)->pinger_flag) or (PING_DISCONNECT * 1000 < ((CUR_TIME - start) / 100000))) {
 
 	}
-	
+
+	if (PING_DISCONNECT*1000 < ((CUR_TIME - start) / 100000)){
+
+		Disconnect(node);
+		return -2;
+
+	}
+
 	start = CUR_TIME - start;
 	start = start / 100000;
 

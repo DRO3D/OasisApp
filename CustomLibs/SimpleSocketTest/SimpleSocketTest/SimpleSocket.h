@@ -13,6 +13,9 @@
 
 #define BACKLOG_THREADS 5
 
+#define AUTO_PING_PERIOD 30
+#define PING_DISCONNECT 30
+
 #pragma comment(lib, "ws2_32.lib")
 
 
@@ -37,6 +40,7 @@ namespace SS{
 			std::string IP_adr;
 			std::string MAC_adr;
 			bool is_connected;
+
 	};
 
 	struct Adapter {

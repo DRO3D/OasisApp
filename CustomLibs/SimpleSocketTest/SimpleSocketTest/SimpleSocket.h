@@ -3,7 +3,6 @@
 #include <iostream>
 #include <string>
 #include<map>
-#include <deque>
 #include <thread>
 #include <iostream>
 #include <vector>
@@ -146,7 +145,7 @@ namespace SS{
 			/// </summary>
 			/// <param name="node">:Name of the pingable node</param>
 			/// <returns>time in msec</returns>
-			float Ping(std::string node);
+			int Ping(std::string node);
 			/// <summary>
 			/// Send WOL packet to the node
 			/// </summary>

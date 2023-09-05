@@ -41,7 +41,7 @@ SS::SimpleSocket::SimpleSocket(std::string name, SS::Adapter adapter_info, int p
 	is_connected = false;
 	WORD DLLVersion = MAKEWORD(2, 1);
 	if (WSAStartup(DLLVersion, &wsa_data) != 0) {
-		SS::Log("Winsoc not initiated. Code(" + std::to_string(WSAGetLastError()) + ")", );
+		SS::Log("Winsoc not initiated. Code(" + std::to_string(WSAGetLastError()) + ")", SS::Crit);
 		exit(1);
 	}
 	is_initiated = true;
@@ -76,6 +76,7 @@ int SS::SimpleSocket::Start(ProcessingType need_processor)
 	if (!is_started){
 		is_started = true;
 		if (type) {
+			SS::Log("Client started", SS::Inf);
 			if (need_processor) {
 				processor = new std::thread(&SS::SimpleSocket::Process, this);
 				processor->detach();
@@ -86,7 +87,7 @@ int SS::SimpleSocket::Start(ProcessingType need_processor)
 		}
 		else
 		{
-
+			SS::Log("Server started", SS::Inf);
 			listner = new std::thread(&SS::SimpleSocket::ListenerFunc, this);
 			listner->detach();
 			if (need_processor) {
@@ -108,8 +109,7 @@ int SS::SimpleSocket::Start(ProcessingType need_processor)
 
 void SS::SimpleSocket::ListenerFunc()
 {
-
-	std::cout << "Listener started." << std::endl;
+	SS::Log("Listening started", SS::Inf);
 	SOCKADDR_IN connection_soc = socket_data;
 	int sizeof_new_con = sizeofaddr;
 	SOCKET slistener = socket(AF_INET, SOCK_STREAM, NULL);
@@ -122,10 +122,10 @@ void SS::SimpleSocket::ListenerFunc()
 		newCon = 0;
 		newCon = accept(slistener, (SOCKADDR*)&connection_soc, &sizeof_new_con);
 		if (newCon == 0 or WSAGetLastError() == 10004) {
-			std::cout << "Error! Client connection failature. (" << WSAGetLastError() << ")" << std::endl;
+			SS::Log("Error! Client connection failature. (" + std::to_string(WSAGetLastError()) + ")", SS::Err);
 		}
 		else {
-			std::cout << "Client Connected!" << std::endl;
+			
 			is_connected = true;
 			char client_name[256];
 			char client_ip[32];
@@ -139,6 +139,7 @@ void SS::SimpleSocket::ListenerFunc()
 			send(newCon, node_mac.c_str(), node_mac.size() + 1, NULL);
 			recv(newCon, client_mac, sizeof(client_mac), NULL);
 
+			SS::Log("Client " + std::string(client_name)+" connected", SS::Inf);
 
 			std::string clinm = "trump";
 
@@ -167,8 +168,14 @@ void SS::SimpleSocket::Process()
 		if (processing_queue->size() > 0) {
 			ProcessData next_proc= processing_queue->front();
 			processing_queue->pop_front();
+			SS::Log("Routin processing (Name: " + next_proc.name + ", Args: " + next_proc.params + ", From: " + next_proc.sender + ")", SS::Inf);
 			if (!(callbacks->find(next_proc.name) == callbacks->end())) {
-				(*callbacks)[next_proc.name].exec(next_proc.params, next_proc.sender);
+				int result;
+				result=(*callbacks)[next_proc.name].exec(next_proc.params, next_proc.sender);
+				SS::Log("Routin ended (Name: " + next_proc.name + ", Args: " + next_proc.params + ", From: " + next_proc.sender + ")"+ " Result: "+std::to_string(result), SS::Inf);
+			}
+			else {
+				SS::Log("Routin not found (Name: " + next_proc.name + ", Args: " + next_proc.params + ", From: " + next_proc.sender + ")", SS::Inf);
 			}
 		}
 	}
@@ -204,12 +211,12 @@ int SS::SimpleSocket::Connect(std::string adres, int port, int retrys)
 				SOCKET Connection = socket(AF_INET, SOCK_STREAM, NULL);
 
 				if (connect(Connection, (SOCKADDR*)&socket_data, sizeofaddr) != 0) {
-					std::cout << "Error! Client connection failature. (" << WSAGetLastError() << ")" << std::endl;
+					SS::Log("Error! Connection to server failature. (" + std::to_string(WSAGetLastError()) + ")", SS::Err);
 					outp = WSAGetLastError();
 				}
 				else
 				{
-					std::cout << "Connected!" << std::endl;
+					SS::Log("Connected to server", SS::Inf);
 					char host_name[256];
 					char host_ip[36];
 					char host_mac[32];
@@ -241,13 +248,14 @@ int SS::SimpleSocket::Connect(std::string adres, int port, int retrys)
 			return outp;
 		}
 		else {
-			std::cout << "Error! Not a client." << std::endl;
+			SS::Log("Trying connection when not a client", SS::Warn);
 			return -1;
 		}
 		
 	}
 	else
 	{
+		SS::Log("Trying connection when not initiated", SS::Err);
 		return -2;
 	}
 }
@@ -269,7 +277,7 @@ int SS::SimpleSocket::Disconnect(std::string NodeName, bool is_external)
 			Send("DisconnectMe");
 		}
 		
-		std::cout << "Client disconnected." << std::endl;
+		SS::Log("Disconnected from server", SS::Inf);
 		
 		shutdown((*node_list)[0].soc, CF_BOTH);
 		for (int i = 0; i < node_list->size(); i++)
@@ -323,7 +331,7 @@ int SS::SimpleSocket::Disconnect(std::string NodeName, bool is_external)
 					shutdown((*node_list)[i].soc, CF_BOTH);
 					(*node_list)[i].name.clear();
 
-					std::cout << "Client "<< (*node_list)[i] .name<<" disconnected." << std::endl;
+					SS::Log("Client"+ (*node_list)[i].name+" disconnected", SS::Inf);
 
 				}
 			}
@@ -340,7 +348,7 @@ int SS::SimpleSocket::Disconnect(std::string NodeName, bool is_external)
 				shutdown((*node_list)[i].soc, CF_BOTH);
 				(*node_list)[i].name.clear();
 				
-				std::cout << "All clients disconnected." << std::endl;
+				SS::Log("All clients disconnected", SS::Inf);
 				
 			}
 			
@@ -390,7 +398,7 @@ int SS::SimpleSocket::ConnectCommand(std::string name, int(*ptr)(std::string, st
 	}
 	else
 	{
-		std::cout << "Not initiated!" << std::endl;
+		SS::Log("Not initiated (Connect command)", SS::Err);
 		return -1;
 	}
 }
@@ -416,7 +424,7 @@ int SS::SimpleSocket::Send(std::string data, std::vector<std::string> clients)
 						pref = std::to_string(++(*node_list)[i].msg_id);
 						pref.append(" ");
 						pref.append(data);
-						std::cout << "SENDING:" << pref << std::endl;
+						SS::Log("SENDING: "+ pref + " (to:" + (*node_list)[i].name + ")", SS::Inf);
 						send((*node_list)[i].soc, pref.c_str(), pref.size() + 1, NULL);
 
 					}
@@ -429,7 +437,7 @@ int SS::SimpleSocket::Send(std::string data, std::vector<std::string> clients)
 							pref = std::to_string(++(*node_list)[i].msg_id);
 							pref.append(" ");
 							pref.append(data);
-							std::cout << "SENDING:" << pref << std::endl;
+							SS::Log("SENDING: " + pref + " (to:" + (*node_list)[i].name + ")", SS::Inf);
 							send((*node_list)[i].soc, pref.c_str(), pref.size() + 1, NULL);
 
 						}
@@ -444,7 +452,7 @@ int SS::SimpleSocket::Send(std::string data, std::vector<std::string> clients)
 									pref = std::to_string(++(*node_list)[i].msg_id);
 									pref.append(" ");
 									pref.append(data);
-									std::cout << "SENDING:" << pref << std::endl;
+									SS::Log("SENDING: " + pref+" (to:"+ (*node_list)[i].name+")", SS::Inf);
 									send((*node_list)[i].soc, pref.c_str(), pref.size() + 1, NULL);
 									break;
 								}
@@ -460,20 +468,20 @@ int SS::SimpleSocket::Send(std::string data, std::vector<std::string> clients)
 			}
 			else
 			{
-				std::cout << "Not initiated!" << std::endl;
+				SS::Log("Not initiated", SS::Err);
 				return -1;
 			}
 		}
 		else 
 		{
-			std::cout << "Not connected!" << std::endl;
+			SS::Log("Not connected", SS::Err);
 			return -2;
 		}
 
 	}
 	else 
 	{
-		std::cout << "Not started!" << std::endl;
+		SS::Log("Not started", SS::Err);
 		return -3;
 	}
 }
@@ -487,13 +495,13 @@ int SS::SimpleSocket::Send(std::string data, std::vector<std::string> clients)
 /// </summary>
 /// <param name="node">:Name of the pingable node</param>
 /// <returns>time in msec</returns>
-float SS::SimpleSocket::Ping(std::string node)
+int SS::SimpleSocket::Ping(std::string node)
 {
 	if (GetNodeByName(node)==nullptr) {
 		return -1;
 	}
-	std::chrono::microseconds iniTime;
-	iniTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+	long long int start;
+	start = CUR_TIME;
 	Send("PingINI", {node});
 
 	GetNodeByName(node)->pinger_flag=true;
@@ -502,9 +510,10 @@ float SS::SimpleSocket::Ping(std::string node)
 
 	}
 	
-	float ans = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() - iniTime.count();
+	start = CUR_TIME - start;
+	start = start / 100000;
 
-	return ans;
+	return start;
 }
 
 /// <summary>
@@ -520,7 +529,7 @@ int SS::SimpleSocket::EnableNode(std::string IP_adr, std::string MAC_adr, int po
 		SOCKET temp_soc;
 
 		if ((temp_soc = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == SOCKET_ERROR) {
-			std::cout << "Failed to create socket : " << WSAGetLastError() << std::endl;
+			SS::Log("Failed to create WOL socket code("+std::to_string(WSAGetLastError())+")", SS::Crit);
 			return -1;
 		}
 
@@ -643,7 +652,7 @@ void SS::SimpleSocket::Reciver(std::string handler_name)
 	while (is_started) {
 		
 		recv(node_handler->soc, data, sizeof(data), NULL);
-		std::cout << "GETING:" << data << std::endl;
+		SS::Log("RECCIEVED: " + std::string(data) + " (from:" + handler_name+")");
 		bool flag = false;
 		int cou = 0;
 		std::string func_name="";
@@ -656,7 +665,9 @@ void SS::SimpleSocket::Reciver(std::string handler_name)
 		}
 
 		if (last_id == verify) {
+			SS::Log("Message dual detected ("+ handler_name+")");
 			Disconnect(node_handler->name);
+			return;
 		}
 		else
 		{
@@ -699,7 +710,9 @@ void SS::SimpleSocket::Reciver(std::string handler_name)
 				NewRequest.params = args;
 				NewRequest.sender = node_handler->name;
 
+				SS::Log("Routin stored (Name: " + NewRequest.name + ", Args: " + NewRequest.params + ", From: "+NewRequest.sender+")", SS::Inf);
 				processing_queue->push_back(NewRequest);
+
 			}
 		}
 

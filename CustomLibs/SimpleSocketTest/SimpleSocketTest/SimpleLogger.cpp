@@ -5,11 +5,13 @@ std::ofstream fout;
 std::string inst_path = "";
 long long int start_time = std::chrono::system_clock::now().time_since_epoch().count();
 
+std::deque<std::string>* LogQ=new std::deque<std::string>;
 
+void SS::Log(std::string message, MsgType type) {
 
-void SS::Log(std::string message, MsgType type ) {
-
-	std::string formed_message=ConvertMsecToStr(STRT_TIME,':') + " [";
+	std::string formed_message = "";
+	formed_message.append("[" + ConvertMsecToStr(CUR_TIME, ':') +"]");
+	formed_message.append(ConvertMsecToStr(STRT_TIME, ':') + " [");
 
 	switch (type)
 	{
@@ -61,12 +63,25 @@ void SS::Log(std::string message, MsgType type ) {
 
 		inst_path = fullpath;
 	}
-	fout.open(inst_path, std::ios_base::app);
+	
+	if(LogQ->size()==0){
+		LogQ->push_back(formed_message);
+		while (LogQ->size() > 0) {
 
-	
-	fout << formed_message<<std::endl;
-	
-	fout.close();
+			std::string nowL = LogQ->front();
+
+			fout.open(inst_path, std::ios_base::app);
+
+
+			fout << nowL << std::endl;
+
+			fout.close();
+			LogQ->pop_front();
+		}
+	}
+	else {
+		LogQ->push_back(formed_message);
+	}
 }
 
 void SS::ChangePath(std::string NewPath) {

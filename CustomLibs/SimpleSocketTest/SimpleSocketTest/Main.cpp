@@ -35,6 +35,13 @@ int server_react(string str, string snd) {
 	return 0;
 }
 
+int ini_ping(string str, string snd) {
+
+
+	return miniMe.Ping("(1)Test client(1)");
+	
+
+}
 
 
 int main() {
@@ -54,6 +61,7 @@ int main() {
 		miniMe=SS::SimpleSocket("Test server", SS::GetAdapterList()[0], 25565, SS::Server);
 		miniMe.ConnectCommand("print", server_react);
 		miniMe.ConnectCommand("stop", shutdown);
+		miniMe.ConnectCommand("png", ini_ping);
 		break; 
 	}
 
@@ -88,8 +96,7 @@ int main() {
 
 		cin >> str;
 
-		miniMe.Send("print" + str);
-		//cout << miniMe.Ping("(2)Test client(2)") << endl;
+		miniMe.Send("print " + str);
 
 	}
 
